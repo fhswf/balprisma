@@ -32,7 +32,7 @@ extern int pid_output;				//pid_output aus PID_Regler_user -> Ausgabe des moment
 
 volatile double winkel;				//Variable: Winkel von Lagesensor
 
-
+// Eine Änderung ...
 
 
 extern ADC_HandleTypeDef hadc1;
