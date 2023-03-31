@@ -1,0 +1,1 @@
+../Core/Src/EXTI_Callback_user.c:23:6:HAL_GPIO_EXTI_Callback	24	static

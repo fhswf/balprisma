@@ -1,0 +1,2 @@
+../Core/Src/usb_prinf.c:13:5:__io_putchar	24	static
+../Core/Src/usb_prinf.c:21:5:_write	32	static

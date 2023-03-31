@@ -1,0 +1,2 @@
+usb_prinf.c:13:5:__io_putchar	1
+usb_prinf.c:21:5:_write	2
