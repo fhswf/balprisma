@@ -8,6 +8,8 @@
 #ifndef INC_LEDS_H_
 #define INC_LEDS_H_
 
+#include <stdint.h>
+
 typedef struct
 {
 	uint8_t b;				// We need byte order GRB in
@@ -21,7 +23,7 @@ typedef struct
 
 #define RGB(a,b,c)  {c,a,b}
 
-void ledring_init();
+void ledring_init(uint8_t);
 void ledring_set_rgb(uint8_t, uint8_t,uint8_t,uint8_t);
 void ledring_set_color(uint8_t led_num, color_t color);
 color_t ledring_get_color(uint8_t led_num);

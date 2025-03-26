@@ -20,6 +20,8 @@
 #ifndef INC_GLOBALS_H_
 #define INC_GLOBALS_H_
 
+#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#define sgn(x)((x)<0?-1:((x)>0)?1:0)
 // #define MAIN_C  // ==> Add this in main_user.c before including
 
 
@@ -54,6 +56,7 @@ GLOBAL(volatile int16_t angle_g,0);
 GLOBAL(volatile int32_t hallcnt_g,0);			// counting hall steps for rpm calculation
 GLOBAL(volatile float   rpm_g,0.0);
 GLOBAL(volatile float   rpma_g,0.0);
+GLOBAL(volatile uint8_t trigger_g,0);
 GLOBAL(float vbat1_g, 0.0);
 GLOBAL(float vbat2_g, 0.0);
 GLOBAL(float vbat3_g, 0.0);

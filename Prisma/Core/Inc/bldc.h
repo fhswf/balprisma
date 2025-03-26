@@ -16,6 +16,7 @@ void bldc_torque(int8_t torque);
 void bldc_freerun(uint8_t mode);
 void bldc_mode(uint8_t mode);
 void bldc_calc_rpm();
+void bldc_brake(uint8_t br);
 
 
 

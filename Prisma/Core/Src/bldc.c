@@ -53,8 +53,8 @@ static uint8_t locked = 1;				// Lock EXTi until initialized
 static volatile uint8_t freerun = 0;
 
 // Used for RPM Calculations
-static uint32_t cnt_upd=0;
-static int8_t dir_rot=0;			// actually measured rotation direction
+static volatile uint32_t cnt_upd=0;
+static volatile int8_t dir_rot=0;			// actually measured rotation direction
 static volatile int dir_field = 0;	// diection of electromagnetic field, i.e. drive direction of motor (may not be current rotation direction)
 
 extern TIM_HandleTypeDef htim1;					//Timer 3 -> ENx  for three coils
@@ -66,9 +66,10 @@ extern TIM_HandleTypeDef htim5;					//Timer 5 -> Counter for RPM
 static uint8_t pwm_en, pwm_in;					// Variables for freerun/drive pwm ratios
 
 // Local static functions prototypes
-static uint8_t bldc_hallstate();
-static void bldc_commute ();
+static uint8_t bldc_hallstate(uint8_t);
+static void bldc_commute (uint8_t);
 
+static volatile int brake=0;
 
 
 void bldc_init()
@@ -145,9 +146,14 @@ void bldc_mode(uint8_t mode)
 		pwm_in = pwm_ratio;
 	}
 
-	bldc_commute();
+	bldc_commute(0);
 }
 
+void bldc_brake(uint8_t br)
+{
+	brake = br;
+	bldc_commute(0);
+}
 
 /***************************************************************************
  * Calculate RPM value from counter sum and number of commutations
@@ -159,18 +165,27 @@ void bldc_mode(uint8_t mode)
  ***************************************************************************/
 void bldc_calc_rpm()
 {
+	uint32_t cnt, hall;
+	int8_t dir;
 
-	if (hallcnt_g ==0)
+	// Backup, since values may get messed up by next IRQ
+	hall=hallcnt_g;
+	cnt = cnt_upd;
+	dir = dir_rot;
+
+	cnt_upd = 0;
+	hallcnt_g = 0;
+
+	if (hall ==0)
 	{
 		rpm_g = 0;
 	}
 	else
 	{
-		rpm_g = dir_rot*(float)(60.*1000000./48.)*cnt_upd/hallcnt_g;
-		hallcnt_g = 0;
+		rpm_g = dir*(float)(60.*1000000./48.)*cnt/hall;
+		//printf("rpm_g %f %u %u %i\r\n",rpm_g,cnt_upd, hallcnt_g,dir_rot);
 	}
 
-	cnt_upd = 0;
 
 	/*}*/
 }
@@ -180,7 +195,7 @@ void bldc_calc_rpm()
  * IMPORTANT: The wheel might rotate in opposite direction as currently
  *            driven when braking!
  ***************************************************************************/
-static uint8_t bldc_hallstate()
+static uint8_t bldc_hallstate(uint8_t mode)
 {
 	static uint8_t state=0;			// keep old state
 	uint8_t cw_state,ccw_state;		// expected next/prev state
@@ -198,17 +213,22 @@ static uint8_t bldc_hallstate()
 	state = (HALL1_GPIO_Port->IDR & 0x7000) >> 12;	// Faster / one read  (PC12,PC13,PC1
 	//           |---   0 or 1  ---|
 	dir_rot = (cw_state == state) - (ccw_state == state);
-	if (dir_rot != dir_old)
-	{
-		dir_old=dir_rot;
-		htim5.Instance->CNT = 0;  // Reset sum counter
-		cnt_upd=0;
-	}
-	// Timer/Counter for rpm measurement
-	hallcnt_g  += htim5.Instance->CNT;	// Sum up counter value
-	htim5.Instance->CNT = 0;  			// Reset sum counter
-	cnt_upd++;							// Count number of commute events
+	// remove jitter
+	if (dir_rot==0) dir_rot=dir_old;
 
+	if(mode)
+	{
+		if (dir_rot != dir_old)
+		{
+			dir_old=dir_rot;
+			htim5.Instance->CNT = 0;  // Reset sum counter
+			cnt_upd=0;
+		}
+		// Timer/Counter for rpm measurement
+		hallcnt_g  += htim5.Instance->CNT;	// Sum up counter value
+		htim5.Instance->CNT = 0;  			// Reset sum counter
+		cnt_upd++;							// Count number of commute events
+	}
 	return state;
 }
 
@@ -220,21 +240,34 @@ static uint8_t bldc_hallstate()
  * This function is mostly called from the ISR, but also
  * when changing parameters to ensure motors spins up.
  *
+ * mode = 0 -> no rpm calc
+ *
  **************************************************************************/
-static void bldc_commute(){
+static void bldc_commute(uint8_t mode){
 	uint8_t state;
 	uint8_t coilconf;
 
-	state = bldc_hallstate();	// get current hall state and detect rotation direction/speed
+	state = bldc_hallstate(mode);	// get current hall state and detect rotation direction/speed
 
 	if (locked) return;		// do nothing if motor is locked / not initialized
 
 	coilconf = bldc_drive[dir_field][state];	// get coils to drive
 
-
+	if (brake) coilconf = 0;
 	// configure coils depending on current state
 	switch (coilconf)
 	{
+	case  0:  // Brake to GND
+		// IN1..3
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+		// EN1..3
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_ratio);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_ratio);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_ratio);
+		break;
+
 	case 12:  // current from coil 1 to coil 2
 		// EN1..3
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_en);
@@ -316,7 +349,7 @@ void EXTI15_10_IRQHandler(void)
 	__HAL_GPIO_EXTI_CLEAR_IT(HALL1_Pin|HALL2_Pin|HALL3_Pin);
 	//__HAL_GPIO_EXTI_CLEAR_IT(HALL2_Pin);
 	//__HAL_GPIO_EXTI_CLEAR_IT(HALL3_Pin);
-	bldc_commute();
+	bldc_commute(1);
 }
 
 

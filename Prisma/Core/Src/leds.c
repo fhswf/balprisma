@@ -34,7 +34,7 @@ extern TIM_HandleTypeDef htim4;			//Timer 4 -> LED-Ring status update
 static volatile int datasentflag=1;				// is DMA transfer completed (1=yes)
 static uint16_t pwm_data[(24*LEDRING_CNT)+50];	// Array with PWM values for DMA transfer
 static color_t led_data[LEDRING_CNT];		    // Array with LED data
-static uint8_t dma_mode = NON_BLOCKING;
+static uint8_t dma_mode = DMA_NON_BLOCKING;
 
 void ledring_init(uint8_t mode)
 {

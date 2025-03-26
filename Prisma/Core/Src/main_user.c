@@ -33,6 +33,7 @@
 #include "bluetooth.h"
 #include "bldc.h"
 #include "adc.h"
+#include "bno055_stm32.h"			//Auslesen des Lagesensors
 #include <stdio.h>
 
 #define MAIN_C
@@ -41,8 +42,10 @@
 extern TIM_HandleTypeDef htim7;
 
 color_t blue=RGB(0,0,32);
+extern I2C_HandleTypeDef hi2c1;		//I2C Kommunikation mit Lagesensor
 
 void test_ledring_status();
+void lage();
 
 void main_user(void)
 {
@@ -50,7 +53,7 @@ void main_user(void)
 	int cnt=0;
 	uart_init();
 	printf("UART Initialized\r\n");
-	ledring_init();
+	ledring_init(DMA_NON_BLOCKING);
 	ledring_welcome();
 	// Init Bluetooth
 	bt_init();
@@ -64,45 +67,38 @@ void main_user(void)
 	adc_init();
 
 	printf("ADC startet\r\n");
+	//Kommunikation mit Lagesensor
+	printf("BNO setup...\r\n");						//Ausgabe: Setup des Lagesensors hat begonnen
+	bno055_assignI2C(&hi2c1);					//Kommunikation
+	bno055_setup();								//Setup
+	bno055_setOperationMode(8);					//Operationsmodus: IMU;
+
 	bldc_init();
 	HAL_TIM_Base_Start_IT(&htim7);
 	printf("TIM7\r\n");
-	//while(1)
-	{
-		bldc_mode(d);
-		d=1-d;
 
-		for (int f=0;f<=100;f+=10)
-		{
-			bldc_torque(-f);
-			printf("Hall cnt: %li   rpm: %f  %f\r\n",hallcnt_g,rpm_g,rpma_g);
-			HAL_Delay(200);
-		}
-		/*
-		for (int f=100;f>=-100;f-=10)
-		{
-			bldc_torque(f);
-			HAL_Delay(200);
-		}
-		for (int f=-100;f<=0;f+=10)
-		{
-			bldc_torque(f);
-			HAL_Delay(200);
-		}
-*/
-		bldc_torque(-40);
-		while(1)
-		{
-			adc_get_and_restart();
-			printf("Vbat1: %6.2lf Vbat2: %6.2lf Vbat3: %6.3lf  Imot: %6.3lf\r\n",
-					vbat1_g, vbat2_g, vbat3_g, imot_g);
-			printf("Hall cnt: %li   rpm: %f  %f\r\n",hallcnt_g,rpm_g,rpma_g);
-			HAL_Delay(200);
-			if (cnt==50) bldc_torque(0);
-			if (cnt==100) bldc_torque(100);
-			cnt++;
-		}
-	}
+	bldc_mode(BLDC_FREERUN);
+	int sgn=-1;
+/*	while(1)
+	{
+		printf("Gas (sgn: %2i)!\r\n",sgn);
+		bldc_torque(sgn*100);
+		HAL_Delay(1000);
+		printf("Weniger Gas\r\n");
+		bldc_torque(sgn*50);
+		HAL_Delay(500);
+		bldc_torque(sgn*50);
+		HAL_Delay(500);
+		printf("Vollbremsung\r\n");
+		bldc_torque(sgn*(-100));
+		HAL_Delay(1000);
+		bldc_torque(0);
+		printf("Ausrollen\r\n");
+		HAL_Delay(5000);
+		sgn=-sgn;
+
+	}*/
+	lage();
 }
 
 
